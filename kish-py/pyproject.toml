@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "kish"
 version = "1.0.1"
 description = "A high-performance Turkish Draughts (Dama) engine"
-readme = "README.md"
+readme = "PYPI_README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "sanavesa" }]
 requires-python = ">=3.8"
@@ -37,4 +37,4 @@ Documentation = "https://github.com/Sanavesa/kish"
 features = ["pyo3/extension-module"]
 python-source = "python"
 module-name = "kish"
-exclude = ["examples/**", "tests/**", "../README.md"]
+exclude = ["examples/**", "tests/**"]
