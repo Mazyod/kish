@@ -1,0 +1,32 @@
+# Rust
+/target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Profiling
+callgrind.out*
+perf.data*
+flamegraph.svg
+cachegrind.out*
+massif.out*
+
+# Coverage
+*.profraw
+*.profdata
+lcov.info
+tarpaulin-report.html
+coverage/
+
+# Misc
+*.log
+*.bak
