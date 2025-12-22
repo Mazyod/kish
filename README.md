@@ -12,6 +12,7 @@ A high-performance Turkish Draughts (Dama) engine written in Rust.
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Examples](#examples)
 - [API Reference](#api-reference)
 - [Performance](#performance)
 - [Rules Summary](#rules-summary)
@@ -83,6 +84,21 @@ fn main() {
         _ => {}
     }
 }
+```
+
+## Examples
+
+The [`examples/`](examples/) directory contains runnable examples:
+
+- `basic_game.rs` - Simple game loop
+- `custom_position.rs` - Setting up custom board positions
+- `game_with_history.rs` - Using undo/redo and move history
+- `perft.rs` - Performance testing with perft
+
+Run an example with:
+
+```bash
+cargo run --example basic_game
 ```
 
 ## API Reference

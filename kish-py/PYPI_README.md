@@ -207,6 +207,16 @@ nodes = board.perft(6)
 print(f"Positions at depth 6: {nodes}")  # ~450 million nodes/sec
 ```
 
+## Examples
+
+The [`examples/`](https://github.com/sanavesa/kish/tree/master/kish-py/examples) directory contains runnable examples:
+
+- `basic_game.py` - Simple game loop
+- `custom_position.py` - Setting up custom board positions
+- `ml_features.py` - Extracting features for machine learning
+- `perft.py` - Performance testing with perft
+- `random_playout.py` - Random game simulation
+
 ## API Reference
 
 ### Types
