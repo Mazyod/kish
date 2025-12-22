@@ -720,63 +720,69 @@ impl Action {
             return ActionPath::new_capture(src, &[dest], is_promotion);
         }
 
-        // Multi-capture: reconstruct intermediate landing squares
-        // Strategy: Starting from src, find which captured piece is adjacent (in capture range),
-        // determine the landing square, then repeat from that landing square until we reach dest.
+        // Multi-capture: reconstruct intermediate landing squares using backtracking.
+        // Strategy: Try all possible capture sequences recursively, verifying each path leads
+        // to a valid completion. This is necessary because kings have multiple valid landing
+        // squares after each capture, and a greedy approach may choose an incorrect intermediate.
         let mut landings = [Square::A1; MAX_PATH_LEN - 1];
         let mut landing_count = 0;
-        let mut current_pos = src;
-        let mut remaining_captures = captured_mask;
 
-        while remaining_captures != 0 {
-            // Find the next captured piece that can be reached from current position
-            // For pawns: capture is 2 squares in one direction (over 1 enemy)
-            // For kings: capture can be any distance orthogonally
+        let found = Self::reconstruct_capture_path(
+            src,
+            captured_mask,
+            dest_mask,
+            was_king,
+            team,
+            &mut landings,
+            &mut landing_count,
+        );
 
-            let (captured_sq, landing_sq) =
-                Self::find_next_capture(current_pos, remaining_captures, dest_mask, was_king, team);
-
-            // Record the landing square
-            landings[landing_count] = landing_sq;
-            landing_count += 1;
-
-            // Remove this captured piece from remaining
-            remaining_captures &= !captured_sq.to_mask();
-
-            // Move to the landing position
-            current_pos = landing_sq;
-        }
+        debug_assert!(
+            found,
+            "Failed to reconstruct valid capture path - this indicates a bug"
+        );
 
         ActionPath::new_capture(src, &landings[..landing_count], is_promotion)
     }
 
-    /// Finds the next capture in a multi-capture sequence.
-    /// Returns (`captured_square`, `landing_square`).
+    /// Recursively reconstructs the capture path using backtracking.
+    /// Returns true if a valid path was found, false otherwise.
     ///
     /// # Arguments
     /// * `current` - The current position of the capturing piece
     /// * `remaining_captures` - Bitboard of remaining captured pieces to find
     /// * `final_dest_mask` - The final destination mask
     /// * `is_king` - Whether the capturing piece is a king
-    /// * `team` - The team making the capture (used to determine valid pawn directions)
-    fn find_next_capture(
+    /// * `team` - The team making the capture
+    /// * `landings` - Output array for landing squares
+    /// * `landing_count` - Output count of landing squares
+    #[allow(clippy::too_many_arguments)]
+    fn reconstruct_capture_path(
         current: Square,
         remaining_captures: u64,
         final_dest_mask: u64,
         is_king: bool,
         team: Team,
-    ) -> (Square, Square) {
+        landings: &mut [Square; MAX_PATH_LEN - 1],
+        landing_count: &mut usize,
+    ) -> bool {
+        // Base case: no more captures remaining
+        if remaining_captures == 0 {
+            // The last landing should be the final destination
+            if *landing_count > 0 {
+                let last_landing = landings[*landing_count - 1];
+                return last_landing.to_mask() == final_dest_mask;
+            }
+            return false;
+        }
+
         let current_row = current.row() as i8;
         let current_col = current.column() as i8;
 
         // Directions: (row_delta, col_delta)
-        // Kings can capture in all 4 directions
-        // Pawns can only capture forward, left, right (not backward)
-        // - White pawns: forward = +1 row (up)
-        // - Black pawns: forward = -1 row (down)
         const ALL_DIRECTIONS: [(i8, i8); 4] = [(0, 1), (0, -1), (1, 0), (-1, 0)];
-        const WHITE_PAWN_DIRECTIONS: [(i8, i8); 3] = [(0, 1), (0, -1), (1, 0)]; // right, left, up
-        const BLACK_PAWN_DIRECTIONS: [(i8, i8); 3] = [(0, 1), (0, -1), (-1, 0)]; // right, left, down
+        const WHITE_PAWN_DIRECTIONS: [(i8, i8); 3] = [(0, 1), (0, -1), (1, 0)];
+        const BLACK_PAWN_DIRECTIONS: [(i8, i8); 3] = [(0, 1), (0, -1), (-1, 0)];
 
         let directions: &[(i8, i8)] = if is_king {
             &ALL_DIRECTIONS
@@ -788,7 +794,7 @@ impl Action {
 
         for &(row_dir, col_dir) in directions {
             if is_king {
-                // King can capture at any distance
+                // King: find a captured piece and try all possible landing squares after it
                 let mut dist = 1i8;
                 let mut found_capture: Option<Square> = None;
 
@@ -807,25 +813,45 @@ impl Action {
 
                     if let Some(captured) = found_capture {
                         // We've passed a captured piece, this is a potential landing
-                        // Check if this is a valid landing (either final dest or intermediate)
-                        if check_mask & final_dest_mask != 0 {
-                            // This is the final destination
-                            return (captured, check_sq);
+                        // Skip if landing on another capture target (can't land on pieces)
+                        if check_mask & remaining_captures != 0 {
+                            dist += 1;
+                            continue;
                         }
-                        // For intermediate landings, we just take the first empty square after capture
-                        // The square is valid if it's not another capture target
-                        if check_mask & remaining_captures == 0 {
-                            return (captured, check_sq);
+
+                        // Try this landing square
+                        let old_count = *landing_count;
+                        landings[*landing_count] = check_sq;
+                        *landing_count += 1;
+
+                        let new_remaining = remaining_captures & !captured.to_mask();
+
+                        if Self::reconstruct_capture_path(
+                            check_sq,
+                            new_remaining,
+                            final_dest_mask,
+                            is_king,
+                            team,
+                            landings,
+                            landing_count,
+                        ) {
+                            return true;
                         }
+
+                        // Backtrack
+                        *landing_count = old_count;
                     } else if check_mask & remaining_captures != 0 {
                         // Found a captured piece
                         found_capture = Some(check_sq);
+                    } else {
+                        // Empty square before finding a capture - can't capture in this direction
+                        // from this distance, but there might be a piece further along
                     }
 
                     dist += 1;
                 }
             } else {
-                // Pawn captures exactly 2 squares away (jumping over 1 enemy)
+                // Pawn: captures exactly 2 squares away
                 let capture_row = current_row + row_dir;
                 let capture_col = current_col + col_dir;
                 let landing_row = current_row + row_dir * 2;
@@ -835,37 +861,38 @@ impl Action {
                     continue;
                 }
 
-                // SAFETY: If landing is in bounds (0..=7), then capture is guaranteed to be in bounds.
-                // For landing_row = current_row + 2*dir to be in 0..=7:
-                //   - If dir = +1: current_row <= 5, so capture_row = current_row + 1 <= 6 ✓
-                //   - If dir = -1: current_row >= 2, so capture_row = current_row - 1 >= 1 ✓
-                //   - If dir = 0: capture_row = current_row (already valid) ✓
-                // Same logic applies to columns.
+                // SAFETY: bounds checked above
                 let capture_sq =
                     unsafe { Square::from_row_column(capture_row as u8, capture_col as u8) };
                 let landing_sq =
                     unsafe { Square::from_row_column(landing_row as u8, landing_col as u8) };
 
                 if capture_sq.to_mask() & remaining_captures != 0 {
-                    return (capture_sq, landing_sq);
+                    let old_count = *landing_count;
+                    landings[*landing_count] = landing_sq;
+                    *landing_count += 1;
+
+                    let new_remaining = remaining_captures & !capture_sq.to_mask();
+
+                    if Self::reconstruct_capture_path(
+                        landing_sq,
+                        new_remaining,
+                        final_dest_mask,
+                        is_king,
+                        team,
+                        landings,
+                        landing_count,
+                    ) {
+                        return true;
+                    }
+
+                    // Backtrack
+                    *landing_count = old_count;
                 }
             }
         }
 
-        // Fallback: should never reach here if action is valid
-        debug_assert!(
-            false,
-            "find_next_capture fallback reached - this indicates an invalid action or bug in path reconstruction"
-        );
-
-        // Return the final destination as a last resort
-        // SAFETY: final_dest_mask is a single bit (from action generation).
-        let final_dest = unsafe { Square::from_mask(final_dest_mask) };
-        // Find any remaining capture
-        let captured_mask = remaining_captures & remaining_captures.wrapping_neg();
-        // SAFETY: captured_mask isolates lowest set bit (single bit).
-        let captured = unsafe { Square::from_mask(captured_mask) };
-        (captured, final_dest)
+        false
     }
 
     /// Returns the source square of this action.
