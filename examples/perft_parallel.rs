@@ -1,6 +1,8 @@
-//! Perft example - performance testing for move generation.
+//! Parallel perft example - multi-threaded performance testing for move generation.
 //!
-//! Run with: `cargo run --release --example perft`
+//! Uses rayon for parallelization and a transposition table for caching.
+//!
+//! Run with: `cargo run --release --example perft_parallel`
 
 use kish::Board;
 use std::time::Instant;
@@ -35,9 +37,13 @@ const PERFT_VALUES: &[(u64, u64)] = &[
     (12, 2_455_651_059_292),
 ];
 
+/// Transposition table size in megabytes.
+const TT_SIZE_MB: usize = 256;
+
 fn main() {
-    println!("=== Perft (Performance Test) ===\n");
-    println!("Counting positions at each depth from standard starting position.\n");
+    println!("=== Parallel Perft (Performance Test) ===\n");
+    println!("Counting positions at each depth from standard starting position.");
+    println!("Using {}MB transposition table.\n", TT_SIZE_MB);
 
     let board = Board::new_default();
 
@@ -49,7 +55,7 @@ fn main() {
 
     for &(depth, expected) in PERFT_VALUES {
         let start = Instant::now();
-        let nodes = board.perft(depth);
+        let nodes = board.perft_parallel(depth, TT_SIZE_MB);
         let elapsed = start.elapsed().as_secs_f64();
 
         let nps = if elapsed > 0.0 {
@@ -70,12 +76,13 @@ fn main() {
         );
 
         // Stop if taking too long
-        // if elapsed > 120.0 {
-        //     println!("\nStopping at depth {depth} (>120s)");
-        //     break;
-        // }
+        if elapsed > 120.0 {
+            println!("\nStopping at depth {depth} (>120s)");
+            break;
+        }
     }
 
     println!();
     println!("Tip: Run with --release for optimized performance.");
+    println!("     Adjust TT_SIZE_MB for different memory/speed tradeoffs.");
 }

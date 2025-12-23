@@ -274,6 +274,8 @@ impl TranspositionTable {
         Self { entries, mask }
     }
 
+    /// XOR trick for lockless hashing: by XORing key with value on store,
+    /// we can detect torn reads where key and value come from different writes.
     #[inline]
     fn get(&self, board: &Board, depth: u8) -> Option<u64> {
         if self.entries.is_empty() {
@@ -284,11 +286,16 @@ impl TranspositionTable {
         let index = (hash as usize) & self.mask;
         let entry = &self.entries[index];
 
-        let stored_key = entry.key.load(Ordering::Relaxed);
+        // Load value first, then key (order matters for XOR trick)
+        let value = entry.value.load(Ordering::Relaxed);
+        let stored_key_xored = entry.key.load(Ordering::Relaxed);
+
+        // Recover original key by XORing with value
+        let recovered_key = stored_key_xored ^ value;
         let expected_key = (hash & 0xFFFF_FFFF_FFFF_FF00) | (depth as u64);
 
-        if stored_key == expected_key {
-            Some(entry.value.load(Ordering::Relaxed))
+        if recovered_key == expected_key {
+            Some(value)
         } else {
             None
         }
@@ -305,7 +312,8 @@ impl TranspositionTable {
         let entry = &self.entries[index];
 
         let key = (hash & 0xFFFF_FFFF_FFFF_FF00) | (depth as u64);
-        entry.key.store(key, Ordering::Relaxed);
+        // XOR trick: store key ^ value so torn reads are detected
+        entry.key.store(key ^ nodes, Ordering::Relaxed);
         entry.value.store(nodes, Ordering::Relaxed);
     }
 
