@@ -339,9 +339,9 @@ impl Game {
     fn position_hash(&self) -> PositionHash {
         // XOR mixing with golden ratio constants for good distribution
         let mut hash = self.board.state.pieces[0];
-        hash ^= self.board.state.pieces[1].wrapping_mul(0x9e3779b97f4a7c15);
-        hash ^= self.board.state.kings.wrapping_mul(0x517cc1b727220a95);
-        hash ^= (self.board.turn.to_usize() as u64).wrapping_mul(0x2545f4914f6cdd1d);
+        hash ^= self.board.state.pieces[1].wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        hash ^= self.board.state.kings.wrapping_mul(0x517c_c1b7_2722_0a95);
+        hash ^= (self.board.turn.to_usize() as u64).wrapping_mul(0x2545_f491_4f6c_dd1d);
         hash
     }
 

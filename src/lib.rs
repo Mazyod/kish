@@ -91,7 +91,7 @@
 //! - [`Square`]: A single square on the board (0-63)
 //! - [`Team`]: White or Black
 //! - [`State`]: Raw bitboard state without turn information
-//! - [`GameStatus`]: Current game status (InProgress, Draw, or Won)
+//! - [`GameStatus`]: Current game status (`InProgress`, `Draw`, or `Won`)
 //!
 //! ## Move Notation
 //!

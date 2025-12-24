@@ -373,19 +373,19 @@ mod tests {
     #[test]
     fn perft_depth_6() {
         let board = Board::new_default();
-        assert_eq!(board.perft(6), 931312);
+        assert_eq!(board.perft(6), 931_312);
     }
 
     #[test]
     fn perft_depth_7() {
         let board = Board::new_default();
-        assert_eq!(board.perft(7), 10782382);
+        assert_eq!(board.perft(7), 10_782_382);
     }
 
     #[test]
     fn perft_depth_8() {
         let board = Board::new_default();
-        assert_eq!(board.perft(8), 123290300);
+        assert_eq!(board.perft(8), 123_290_300);
     }
 
     #[test]
