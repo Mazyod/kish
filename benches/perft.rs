@@ -24,6 +24,13 @@ fn benchmark_perft(c: &mut Criterion) {
             },
         );
         group.bench_with_input(
+            BenchmarkId::new("Board_TT/depth", depth),
+            &depth,
+            |b, &depth| {
+                b.iter(|| black_box(board.perft_tt(black_box(depth), 64)));
+            },
+        );
+        group.bench_with_input(
             BenchmarkId::new("Game/depth", depth),
             &depth,
             |b, &depth| {

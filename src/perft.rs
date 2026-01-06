@@ -2,6 +2,7 @@
 //!
 //! This module provides perft functions for move generation testing:
 //! - [`Board::perft`] - Sequential perft (fast for shallow depths)
+//! - [`Board::perft_tt`] - Sequential perft with transposition table (for medium depths)
 //! - [`Board::perft_parallel`] - Parallel perft with transposition table (for deep searches)
 //!
 //! # Perft (Performance Test)
@@ -104,6 +105,95 @@ impl Board {
             board.swap_turn_();
             nodes += board.perft_inner(depth - 1, scratches, count_scratch);
         }
+        nodes
+    }
+
+    /// Sequential perft with transposition table.
+    ///
+    /// Uses a transposition table to cache and reuse results for positions
+    /// that occur via transposition (different move orders reaching same position).
+    /// This is faster than plain `perft` for depths >= 7.
+    ///
+    /// # Arguments
+    /// * `depth` - The search depth
+    /// * `tt_size_mb` - Approximate size of transposition table in megabytes (0 to disable)
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kish::Board;
+    ///
+    /// let board = Board::new_default();
+    /// // Use 64MB transposition table
+    /// let nodes = board.perft_tt(8, 64);
+    /// println!("Perft(8) = {}", nodes);
+    /// ```
+    #[must_use]
+    pub fn perft_tt(&self, depth: u64, tt_size_mb: usize) -> u64 {
+        if depth == 0 {
+            return 1;
+        }
+        if depth <= 2 || tt_size_mb == 0 {
+            return self.perft(depth);
+        }
+
+        // Calculate TT capacity based on size
+        // Each entry: ~16 bytes (key + value as AtomicU64)
+        // With overhead, estimate ~64 bytes per entry
+        let tt_capacity = (tt_size_mb * 1024 * 1024) / 64;
+
+        // Create transposition table
+        let tt = TranspositionTable::new(tt_capacity);
+
+        // Pre-allocate scratch buffers
+        let mut count_scratch = Vec::with_capacity(48);
+        let mut scratches: Vec<Vec<Action>> = (1..depth).map(|_| Vec::with_capacity(48)).collect();
+
+        self.perft_tt_seq_inner(depth, &mut scratches, &mut count_scratch, &tt)
+    }
+
+    /// Internal sequential perft with transposition table lookup.
+    #[inline(always)]
+    fn perft_tt_seq_inner(
+        &self,
+        depth: u64,
+        scratches: &mut [Vec<Action>],
+        count_scratch: &mut Vec<Action>,
+        tt: &TranspositionTable,
+    ) -> u64 {
+        // Bulk leaf optimization
+        if depth == 1 {
+            let count = self.count_actions(count_scratch);
+            return if count == 0 { 1 } else { count };
+        }
+
+        // TT lookup (only for depth >= 3 to avoid overhead)
+        if depth >= 3 {
+            if let Some(nodes) = tt.get(self, depth as u8) {
+                return nodes;
+            }
+        }
+
+        let idx = depth as usize - 2;
+        self.actions_into(&mut scratches[idx]);
+        if scratches[idx].is_empty() {
+            return 1;
+        }
+
+        let action_count = scratches[idx].len();
+        let mut nodes = 0u64;
+        for i in 0..action_count {
+            let action = scratches[idx][i];
+            let mut board = self.apply(&action);
+            board.swap_turn_();
+            nodes += board.perft_tt_seq_inner(depth - 1, scratches, count_scratch, tt);
+        }
+
+        // Store in TT (only for depth >= 3)
+        if depth >= 3 {
+            tt.insert(self, depth as u8, nodes);
+        }
+
         nodes
     }
 
@@ -407,6 +497,15 @@ mod tests {
         let seq = board.perft(7);
         let par = board.perft_parallel(7, 64); // 64MB TT
         assert_eq!(seq, par);
+    }
+
+    #[test]
+    fn perft_tt_matches_sequential() {
+        let board = Board::new_default();
+        // Test at depth 7 where we know the answer
+        let seq = board.perft(7);
+        let tt = board.perft_tt(7, 64); // 64MB TT
+        assert_eq!(seq, tt);
     }
 
     // ========== Simple Position Perft Tests ==========
